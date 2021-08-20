@@ -5,3 +5,5 @@ This script setup replication for VM which start on boot.
 Если такие VM найдены, то скрипт:
 * Отправляет письмо на email root пользователя
 * Затем он настраивает репликацию для найденных VM
+
+Карта репликаций (откуда -> куда) берется из файла: /root/Sync/replication-map.json
