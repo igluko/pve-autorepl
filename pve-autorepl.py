@@ -10,7 +10,7 @@ root_email = ""
 def init():
     global replication_map, root_email
     # Load replication map
-    file = open("/root/Sync/replication-map", "r").read().strip()
+    file = open("/root/Sync/replication-map.json", "r").read().strip()
     replication_map = json.loads(file)
     # Load root email
     cmd = "pvesh get /access/users/root@pam --output-format json-pretty"
