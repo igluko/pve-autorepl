@@ -30,7 +30,8 @@ def init():
     root_email = js["email"]
 
 
-
+def log(msg):
+    print(msg)
 
 def sendmail(subject: str, body: str):
     body_str_encoded_to_byte = body.encode()
@@ -39,8 +40,6 @@ def sendmail(subject: str, body: str):
         print(f'Error sendmail(): {output.stderr.decode("utf-8")}')
         exit(1)
 
-def log(msg):
-    print(msg)
 
 def get_repl_vmids():
     cmd = 'pvesh get /cluster/replication --output-format json-pretty'
@@ -139,17 +138,40 @@ def enable_qm_ha(vmid):
     else:
         log(f'Success: enable_qm_replication({vmid})')
 
+def setup_ha_groups():
+    # Check if high availability is needed for localhost
+    if hostname in replication_map:
+        # get current ha groups
+        cmd = f'pvesh get /cluster/ha/groups --output-format json-pretty'
+        output = subprocess.run(cmd.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        js = json.loads(output.stdout)
+        # search localhost in current ha groups
+        for obj in js:
+            if obj['group'] == hostname:
+                return # ha group for this server already exist
+        # setup ha group for localhost
+        msg =f"Setup new replication group: {hostname}:2,{replication_map[hostname]}:1"
+        sendmail(f"{hostname} pve-autorepl", msg)
+        cmd = f'ha-manager groupadd {hostname} -nodes {hostname}:2,{replication_map[hostname]}:1 -nofailback -restricted'
+        output = subprocess.run(cmd.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        if output.stderr != "":
+            log(f'Error: {msg}')
+        else:
+            log(f'Success: {msg}')
+
 if __name__ == '__main__':
     init()
 
     # enable replication for new vm's which starts on boot
     vmid_list = get_qm_need_replication_vmids()
     if len(vmid_list) != 0:
-        msg = (f"Found {len(vmid_list)} vm needs to replication: {vmid_list}")
+        msg = f"Found {len(vmid_list)} vm needs to replication: {vmid_list}"
         log(msg)
         sendmail(f"{hostname} pve-autorepl", msg)
         for vmid in vmid_list:
             enable_qm_replication(vmid)
+    # setup HA groups by replication-map.json
+    setup_ha_groups()
     # enable HA for new replicated VM's
     vmid_list = get_qm_need_ha_vmids()
     if len(vmid_list) != 0:
@@ -158,3 +180,4 @@ if __name__ == '__main__':
         sendmail(f"{hostname} pve-autorepl", msg)
         for vmid in vmid_list:
             enable_qm_ha(vmid)
+
