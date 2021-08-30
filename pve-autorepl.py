@@ -131,7 +131,7 @@ def get_qm_need_ha_vmids():
     return vm_list_need_ha
 
 def enable_qm_ha(vmid):
-    cmd = f'ha-manager add vm:{vmid} --max_relocate=1 --max_restart=1 --group={hostname}'
+    cmd = f'/usr/sbin/ha-manager add vm:{vmid} --max_relocate=1 --max_restart=1 --group={hostname}'
     output = subprocess.run(cmd.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     if output.stderr != "":
         log(f'Error: enable_qm_replication({vmid}): {output.stderr}')
@@ -152,7 +152,7 @@ def setup_ha_groups():
         # setup ha group for localhost
         msg =f"Setup new replication group: {hostname}:2,{replication_map[hostname]}:1"
         sendmail(f"{hostname} pve-autorepl", msg)
-        cmd = f'ha-manager groupadd {hostname} -nodes {hostname}:2,{replication_map[hostname]}:1 -nofailback -restricted'
+        cmd = f'/usr/sbin/ha-manager groupadd {hostname} -nodes {hostname}:2,{replication_map[hostname]}:1 -nofailback -restricted'
         output = subprocess.run(cmd.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         if output.stderr != "":
             log(f'Error: {msg}')
@@ -170,14 +170,15 @@ if __name__ == '__main__':
         sendmail(f"{hostname} pve-autorepl", msg)
         for vmid in vmid_list:
             enable_qm_replication(vmid)
-    # setup HA groups by replication-map.json
-    setup_ha_groups()
-    # enable HA for new replicated VM's
-    vmid_list = get_qm_need_ha_vmids()
-    if len(vmid_list) != 0:
-        msg =f"Found {len(vmid_list)} vm needs to enable HA: {vmid_list}"
-        log(msg)
-        sendmail(f"{hostname} pve-autorepl", msg)
-        for vmid in vmid_list:
-            enable_qm_ha(vmid)
+    if auto_ha:
+        # setup HA groups by replication-map.json
+        setup_ha_groups()
+        # enable HA for new replicated VM's
+        vmid_list = get_qm_need_ha_vmids()
+        if len(vmid_list) != 0:
+            msg =f"Found {len(vmid_list)} vm needs to enable HA: {vmid_list}"
+            log(msg)
+            sendmail(f"{hostname} pve-autorepl", msg)
+            for vmid in vmid_list:
+                enable_qm_ha(vmid)
 
