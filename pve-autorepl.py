@@ -1,14 +1,22 @@
 #!/usr/bin/python3
 
-import subprocess
+import argparse
 import json
+import subprocess
 
 hostname = open("/etc/hostname", "r").read().strip()
 replication_map = {}
 root_email = ""
+auto_ha = False
 
 def init():
-    global replication_map, root_email
+    global auto_ha, replication_map, root_email
+    # parse arguments
+    parser = argparse.ArgumentParser(description='Find VM that configured for autoloading and\
+        setup replication and high availability')
+    parser.add_argument('-a', '--ha', action='store_true', help='enable auto high availability')
+    args = parser.parse_args()
+    auto_ha = args.ha
     # Load replication map
     file = open("/root/Sync/replication-map.json", "r").read().strip()
     replication_map = json.loads(file)
@@ -20,6 +28,9 @@ def init():
         exit(1)
     js = json.loads(output.stdout)
     root_email = js["email"]
+
+
+
 
 def sendmail(subject: str, body: str):
     body_str_encoded_to_byte = body.encode()
@@ -37,7 +48,8 @@ def get_repl_vmids():
     js = json.loads(output.stdout)
     vmid_list = []
     for obj in js:
-        vmid_list.append(obj['guest'])
+        if obj['source'] == hostname:
+            vmid_list.append(obj['guest'])
     return vmid_list
 
  
@@ -97,6 +109,35 @@ def get_qm_need_replication_vmids():
 
     return vm_list_need_replication
 
+def get_ha_vmids():
+    cmd = 'pvesh get /cluster/ha/resources --output-format json-pretty'
+    output = subprocess.run(cmd.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    js = json.loads(output.stdout)
+    vmid_list = []
+    for obj in js:
+        if obj['group'] == hostname:
+            sid = obj['sid']
+            vmid = sid.split(":")[1]
+            vmid_list.append(vmid)
+    return vmid_list
+
+def get_qm_need_ha_vmids():
+    vm_list_replicated = get_repl_vmids()
+    vm_list_ha = get_ha_vmids()
+    vm_list_need_ha = []
+    for vmid in vm_list_replicated:
+        if vmid not in vm_list_ha:
+            vm_list_need_ha.append(vmid)
+
+    return vm_list_need_ha
+
+def enable_qm_ha(vmid):
+    cmd = f'ha-manager add vm:{vmid} --max_relocate=1 --max_restart=1 --group={hostname}'
+    output = subprocess.run(cmd.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    if output.stderr != "":
+        log(f'Error: enable_qm_replication({vmid}): {output.stderr}')
+    else:
+        log(f'Success: enable_qm_replication({vmid})')
 
 if __name__ == '__main__':
     init()
@@ -104,7 +145,16 @@ if __name__ == '__main__':
     # enable replication for new vm's which starts on boot
     vmid_list = get_qm_need_replication_vmids()
     if len(vmid_list) != 0:
-        log(f"Founded {len(vmid_list)} vm needs to replication: {vmid_list}")
-        sendmail(f"{hostname} pve-autorepl", f"Founded {len(vmid_list)} vm needs to replication: {vmid_list}")
+        msg = (f"Found {len(vmid_list)} vm needs to replication: {vmid_list}")
+        log(msg)
+        sendmail(f"{hostname} pve-autorepl", msg)
         for vmid in vmid_list:
             enable_qm_replication(vmid)
+    # enable HA for new replicated VM's
+    vmid_list = get_qm_need_ha_vmids()
+    if len(vmid_list) != 0:
+        msg =f"Found {len(vmid_list)} vm needs to enable HA: {vmid_list}"
+        log(msg)
+        sendmail(f"{hostname} pve-autorepl", msg)
+        for vmid in vmid_list:
+            enable_qm_ha(vmid)
