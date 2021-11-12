@@ -8,15 +8,28 @@ hostname = open("/etc/hostname", "r").read().strip()
 replication_map = {}
 root_email = ""
 auto_ha = False
+autostart = False
+maxvmid = False
+rate = ""
+interval = "*/15"
 
 def init():
-    global auto_ha, replication_map, root_email
+    global auto_ha, replication_map, root_email, maxvmid, autostart, rate, interval
     # parse arguments
     parser = argparse.ArgumentParser(description='Find VM that configured for autoloading and\
         setup replication and high availability')
-    parser.add_argument('-a', '--ha', action='store_true', help='enable auto high availability')
+    parser.add_argument('--ha', action='store_true', help='enable auto high availability')
+    parser.add_argument('--autostart', action='store_true', help='only vm which start on boot will be replicated')
+    parser.add_argument("--maxvmid", help="maximum vmid number for replication", type=int)
+    parser.add_argument("--rate", help="maximum rate in MB/s", type=int)
+    parser.add_argument("--interval", help="interval in minutes, example */15 - every 15 minutes", type=str)
     args = parser.parse_args()
     auto_ha = args.ha
+    maxvmid = args.maxvmid
+    if args.rate:
+        rate = '--rate ' + str(args.rate)
+    if args.interval:
+        interval = args.interval
     # Load replication map
     file = open("/root/Sync/replication-map.json", "r").read().strip()
     replication_map = json.loads(file)
@@ -90,23 +103,49 @@ def get_qm_autostart_vmids():
     return vmid_autostart_list
 
 def enable_qm_replication(vmid):
-    cmd = f'pvesr create-local-job {vmid}-0 {replication_map[hostname]} --schedule */15 --rate 50'
+    cmd = f'pvesr create-local-job {vmid}-0 {replication_map[hostname]} --schedule {interval} {rate}'
+    print(cmd)
     output = subprocess.run(cmd.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     if output.stderr != "":
         log(f'Error: enable_qm_replication({vmid}): {output.stderr}')
     else:
         log(f'Success: enable_qm_replication({vmid})')
 
-def get_qm_need_replication_vmids():
-    vm_list_autostart = get_qm_autostart_vmids()
-    vm_list_replicated = get_repl_vmids()
+def get_qm_not_replication_vmids():
+    vm_list = get_qm_local_vmids()
+    vm_list_has_replication = get_repl_vmids()
     
-    vm_list_need_replication = []
-    for vmid in vm_list_autostart:
-        if vmid not in vm_list_replicated:
-            vm_list_need_replication.append(vmid)
+    vm_list_not_replication = []
+    for vmid in vm_list:
+        if vmid not in vm_list_has_replication:
+            vm_list_not_replication.append(vmid)
 
-    return vm_list_need_replication
+    return vm_list_not_replication
+
+def filter_qm_is_autostart(qm_list):
+    vm_list_autostart = get_qm_autostart_vmids()
+
+    vm_list_filtered = []
+    for vmid in qm_list:
+        if vmid in vm_list_autostart:
+            vm_list_filtered.append(vmid)
+
+    return vm_list_filtered
+
+def filter_qm_in_list(qm_list, match_list):
+    vm_list_filtered = []
+    for vmid in qm_list:
+        if int(vmid) in match_list:
+            vm_list_filtered.append(vmid)
+    return vm_list_filtered
+
+def get_qm_need_replication_vmids():
+    vm_list = get_qm_not_replication_vmids()
+    if autostart:
+        vm_list = filter_qm_is_autostart(vm_list)
+    if maxvmid:
+        vm_list = filter_qm_in_list(vm_list, range(maxvmid))
+    return vm_list
 
 def get_ha_vmids():
     cmd = 'pvesh get /cluster/ha/resources --output-format json-pretty'
