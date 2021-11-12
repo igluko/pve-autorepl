@@ -10,8 +10,26 @@ This script setup replication for VM which start on boot.
 root@AX101-Helsinki-02:~# cat /root/Sync/replication-map.json
 ```
 {
-   "node01.main.local":"node01.replica.local",
-   "node02.main.local":"node02.replica.local",
-   "node03.main.local":"node03.replica.local"
+   "source-hostname-01":"target-hostname-01",
+   "source-hostname-02":"target-hostname-02",
+   "source-hostname-03":"target-hostname-03"
 }
 ```
+
+optional arguments:
+```
+  -h, --help         show this help message and exit
+  --ha               enable auto high availability
+  --autostart        only vm which start on boot will be replicated
+  --maxvmid MAXVMID  maximum vmid number for replication
+ ```
+  
+Examples:
+
+```
+./pve-autorepl.py
+./pve-autorepl.py --maxvmid 500
+./pve-autorepl.py --autostart
+./pve-autorepl.py --maxvmid 500 --autostart
+```
+
