@@ -18,18 +18,17 @@ root@AX101-Helsinki-02:~# cat /root/Sync/replication-map.json
 
 optional arguments:
 ```
-  -h, --help         show this help message and exit
-  --ha               enable auto high availability
-  --autostart        only vm which start on boot will be replicated
-  --maxvmid MAXVMID  maximum vmid number for replication
+  -h, --help           show this help message and exit
+  --ha                 enable auto high availability
+  --autostart          only vm which start on boot will be replicated
+  --maxvmid MAXVMID    maximum vmid number for replication
+  --rate RATE          maximum rate in MB/s
+  --interval INTERVAL  interval in minutes, example */15 - every 15 minutes
  ```
   
-Examples:
+Example:
 
 ```
-./pve-autorepl.py
-./pve-autorepl.py --maxvmid 500
-./pve-autorepl.py --autostart
-./pve-autorepl.py --maxvmid 500 --autostart
+./pve-autorepl.py --maxvmid 500 --rate 50 --interval */1
 ```
 
