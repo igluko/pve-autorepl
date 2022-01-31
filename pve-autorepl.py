@@ -61,7 +61,7 @@ def get_repl_vmids():
     vmid_list = []
     for obj in js:
         if obj['source'] == hostname:
-            vmid_list.append(obj['guest'])
+            vmid_list.append(int(obj['guest']))
     return vmid_list
 
  
@@ -71,7 +71,7 @@ def get_qm_local_vmids():
     js = json.loads(output.stdout)
     vmid_list = []
     for obj in js:
-        vmid_list.append(obj['vmid'])
+        vmid_list.append(int(obj['vmid']))
     return vmid_list
 
 def get_ct_local_vmids():
